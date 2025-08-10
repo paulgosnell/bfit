@@ -1,5 +1,5 @@
 import { Hono } from "npm:hono@4";
-import { getServiceClient } from "../utils/db.ts";
+import { getServiceClient, getUserByTelegramId } from "../utils/db.ts";
 import { sendTelegramMessage } from "../utils/telegram.ts";
 
 const app = new Hono();
@@ -7,11 +7,13 @@ const app = new Hono();
 // Support both /oauth/strava/start and /oauth-strava/oauth/strava/start
 app.get("/oauth/strava/start", async (c) => {
   const clientId = Deno.env.get("STRAVA_CLIENT_ID") || ""; // TODO
-  const edgeBase = Deno.env.get("EDGE_BASE_URL") || originFromRequest(c.req.raw);
-  const redirectUri = `${edgeBase}/oauth/strava/callback`;
+  const appBase = Deno.env.get("APP_BASE_URL") || originFromRequest(c.req.raw);
+  const redirectUri = `${appBase}/oauth/strava/callback`;
   const uid = c.req.query("uid");
-  if (!uid) return c.text("Missing uid", 400);
-  const state = await signState(uid);
+  const tgid = c.req.query("tgid");
+  const resolvedUid = await resolveUid(uid, tgid);
+  if (!resolvedUid) return c.text("Missing uid", 400);
+  const state = await signState(resolvedUid);
   const scope = "read,activity:read_all,profile:read_all";
   const url = `https://m.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=auto&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
   return c.redirect(url, 302);
@@ -19,11 +21,13 @@ app.get("/oauth/strava/start", async (c) => {
 
 app.get("/oauth-strava/oauth/strava/start", async (c) => {
   const clientId = Deno.env.get("STRAVA_CLIENT_ID") || "";
-  const edgeBase = Deno.env.get("EDGE_BASE_URL") || originFromRequest(c.req.raw);
-  const redirectUri = `${edgeBase}/oauth/strava/callback`;
+  const appBase = Deno.env.get("APP_BASE_URL") || originFromRequest(c.req.raw);
+  const redirectUri = `${appBase}/oauth/strava/callback`;
   const uid = c.req.query("uid");
-  if (!uid) return c.text("Missing uid", 400);
-  const state = await signState(uid);
+  const tgid = c.req.query("tgid");
+  const resolvedUid = await resolveUid(uid, tgid);
+  if (!resolvedUid) return c.text("Missing uid", 400);
+  const state = await signState(resolvedUid);
   const scope = "read,activity:read_all,profile:read_all";
   const url = `https://m.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=auto&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
   return c.redirect(url, 302);
@@ -185,3 +189,14 @@ function hexToBytes(hex: string): Uint8Array {
 export default {
   fetch: (req: Request) => app.fetch(req),
 };
+
+async function resolveUid(uid?: string | null, tgid?: string | null): Promise<string | null> {
+  if (uid && /^\w{8}-\w{4}-\w{4}-\w{4}-\w{12}$/.test(uid)) return uid;
+  const sb = getServiceClient();
+  const tgNum = (uid && /^\d+$/.test(uid) ? Number(uid) : undefined) ?? (tgid && /^\d+$/.test(tgid) ? Number(tgid) : undefined);
+  if (tgNum) {
+    const user = await getUserByTelegramId(sb, tgNum);
+    return user?.id ?? null;
+  }
+  return null;
+}
