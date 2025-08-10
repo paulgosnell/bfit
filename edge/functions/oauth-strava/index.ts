@@ -64,7 +64,9 @@ app.get("/oauth/strava/callback", async (c) => {
   // Trigger initial backfill
   await sb.from("webhook_logs").insert({ source: "strava", payload: { note: "oauth_completed", provider_user_id } });
 
-  return c.html("<p>Strava connected. You can close this window and return to Telegram.</p>");
+  const bot = (Deno.env.get("PUBLIC_BOT_USERNAME") || "@the_bfit_bot").replace(/^@/, "");
+  const html = `<!doctype html><html><head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/><title>BFIT – Connected</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;text-align:center}a.button{display:inline-block;margin-top:1rem;padding:.75rem 1rem;background:#111827;color:#fff;border-radius:10px;text-decoration:none}</style></head><body><h2>Strava connected ✅</h2><p>You can return to Telegram.</p><a class=\"button\" href=\"tg://resolve?domain=${bot}&start=connected\">Open Telegram</a><p><a href=\"https://t.me/${bot}?start=connected\">Open in Telegram (web link)</a></p><script>setTimeout(function(){location.href='tg://resolve?domain=${bot}&start=connected'},800);</script></body></html>`;
+  return c.html(html);
 });
 
 function originFromRequest(req: Request): string {
