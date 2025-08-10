@@ -3,22 +3,187 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>BFIT</title>
+  <title>BFIT — League Hub</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; line-height: 1.4; }
-    .card { max-width: 640px; margin: 0 auto; padding: 1.5rem; border: 1px solid #e5e7eb; border-radius: 12px; }
-    a.button { display: inline-block; padding: .75rem 1rem; background: #111827; color: #fff; border-radius: 8px; text-decoration: none; }
+    :root{
+      --bg:#0b0c10; --card:#111218; --muted:#9ca3af; --text:#e5e7eb; --brand:#15d3a5; --border:#1f2330;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; padding:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background:var(--bg); color:var(--text);
+    }
+    .wrap{max-width:860px;margin:0 auto;padding:24px}
+    .card{
+      background:var(--card); border:1px solid var(--border);
+      border-radius:16px; padding:20px; box-shadow:0 1px 0 rgba(0,0,0,.15);
+    }
+    header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+    .logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#0cf,#0f8);display:inline-block}
+    h1{font-size:18px;margin:0}
+    .sub{color:var(--muted);font-size:13px}
+    .row{display:flex;gap:16px;flex-wrap:wrap}
+    .col{flex:1 1 280px}
+    .title{font-weight:600;margin:0 0 12px 0;font-size:14px;letter-spacing:.2px}
+    .leaderboard li{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px}
+    .leaderboard li.me{border-color:#2dd4bf;background:rgba(21,211,165,.08)}
+    .muted{color:var(--muted)}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;font-size:12px}
+    .btn{display:inline-block;padding:10px 14px;border-radius:10px;text-decoration:none;background:#1f2937;color:#fff;border:1px solid var(--border)}
+    .btn.brand{background:var(--brand); color:#001b14; font-weight:600}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .stat{padding:12px;border:1px solid var(--border);border-radius:10px;text-align:center}
+    .stat b{display:block;font-size:18px}
+    footer{margin-top:18px;color:var(--muted);font-size:12px}
+    .right{margin-left:auto}
+    .row-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .hide{display:none}
+    .success{color:#34d399}
+    .warn{color:#fbbf24}
   </style>
-  </head>
-  <body>
+</head>
+<body>
+  <div class="wrap">
     <div class="card">
-      <h1>BFIT</h1>
-      <p>Compete weekly on steps and runs inside Telegram.</p>
-      <p><a class="button" href="/oauth/strava/start">Connect Strava</a></p>
-      <p style="color:#6b7280;font-size:14px">Hosted on Netlify. OAuth routes proxy to Supabase Edge.</p>
-      <p>Telegram bot: <a href="https://t.me/the_bfit_bot">@the_bfit_bot</a></p>
+      <header>
+        <span class="logo" aria-hidden="true"></span>
+        <div>
+          <h1>BFIT — League Hub</h1>
+          <div class="sub" id="subline">Compete weekly on steps &amp; runs. Week <span id="weekNum">—</span>.</div>
+        </div>
+        <div class="right pill" id="connPill"><span>Strava</span><span id="connState" class="warn">Not connected</span></div>
+      </header>
+
+      <div class="row row-actions" id="ctaRow">
+        <a id="connectBtn" class="btn brand" href="#">Connect Strava</a>
+        <a class="btn" href="https://t.me/the_bfit_bot" target="_blank" rel="noopener">Open in Telegram</a>
+        <button class="btn" id="refreshBtn" type="button">Refresh</button>
+      </div>
+
+      <div class="row" style="margin-top:16px">
+        <div class="col">
+          <div class="title">Leaderboard (This Week)</div>
+          <ul id="lb" class="leaderboard">
+            <li class="muted">Loading…</li>
+          </ul>
+        </div>
+        <div class="col">
+          <div class="title">My Stats</div>
+          <div class="grid">
+            <div class="stat"><b id="pts">—</b><span class="muted">Points</span></div>
+            <div class="stat"><b id="steps">—</b><span class="muted">Steps</span></div>
+            <div class="stat"><b id="dist">—</b><span class="muted">Distance</span></div>
+            <div class="stat"><b id="streak">—</b><span class="muted">Streak</span></div>
+          </div>
+          <div style="margin-top:12px" id="rivalNudge" class="muted"></div>
+        </div>
+      </div>
+
+      <footer>
+        Hosted on Netlify. API via Supabase Edge. Telegram: <a style="color:#93c5fd" href="https://t.me/the_bfit_bot">@the_bfit_bot</a>
+      </footer>
     </div>
-  </body>
+  </div>
+
+  <script>
+    // --- Helpers
+    const qs = new URLSearchParams(location.search);
+    const weekNumEl = document.getElementById('weekNum');
+    const lbEl = document.getElementById('lb');
+    const ptsEl = document.getElementById('pts');
+    const stepsEl = document.getElementById('steps');
+    const distEl = document.getElementById('dist');
+    const streakEl = document.getElementById('streak');
+    const rivalEl = document.getElementById('rivalNudge');
+    const connPill = document.getElementById('connPill');
+    const connState = document.getElementById('connState');
+    const connectBtn = document.getElementById('connectBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+
+    function isoWeekNumber(d=new Date()){
+      // ISO week, Monday start
+      const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+      const dayNum = (date.getUTCDay() + 6) % 7;
+      date.setUTCDate(date.getUTCDate() - dayNum + 3);
+      const firstThursday = new Date(Date.UTC(date.getUTCFullYear(),0,4));
+      const diff = (date - firstThursday) / 86400000;
+      return 1 + Math.floor(diff / 7);
+    }
+
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    const uid = tg?.initDataUnsafe?.user?.id || qs.get('uid') || '';
+    const appBase = location.origin;
+    weekNumEl.textContent = isoWeekNumber();
+
+    // Link the connect button properly (works both inside Telegram and standalone)
+    connectBtn.href = `/oauth/strava/start${uid ? ('?uid=' + encodeURIComponent(uid)) : ''}`;
+
+    // --- Fetch functions (these endpoints are expected to be provided by Edge Functions)
+    async function fetchJSON(url){
+      try{
+        const r = await fetch(url, { credentials:'omit' });
+        if(!r.ok) throw new Error('HTTP ' + r.status);
+        return await r.json();
+      }catch(e){
+        console.warn('Fetch failed', url, e);
+        return null;
+      }
+    }
+
+    async function loadState(){
+      // Check connection + me + leaderboard.
+      // These endpoints are placeholders you can implement:
+      //  - /api/me?uid=<id>  -> { connected:boolean, stats:{points,steps,distance,streak}, rival:{name,diff}, username }
+      //  - /api/leaderboard?uid=<id> -> { rows:[{name,points,me:boolean}], week:number }
+      const me = await fetchJSON(`/api/me${uid ? ('?uid=' + encodeURIComponent(uid)) : ''}`);
+      const lb = await fetchJSON(`/api/leaderboard${uid ? ('?uid=' + encodeURIComponent(uid)) : ''}`);
+
+      // Connection state
+      const connected = !!me?.connected;
+      connState.textContent = connected ? 'Connected' : 'Not connected';
+      connState.className = connected ? 'success' : 'warn';
+      if(connected) connectBtn.classList.add('hide');
+
+      // Stats
+      ptsEl.textContent = me?.stats?.points ?? '—';
+      stepsEl.textContent = me?.stats?.steps ?? '—';
+      distEl.textContent = me?.stats?.distance ?? '—';
+      streakEl.textContent = me?.stats?.streak ? (me.stats.streak + ' wk') : '—';
+
+      if(me?.rival?.diff > 0){
+        rivalEl.textContent = `Only ${me.rival.diff} pts to pass ${me.rival.name}. One good session will do it.`;
+      }
+
+      // Leaderboard
+      lbEl.innerHTML = '';
+      if(lb?.rows?.length){
+        lb.rows.slice(0,10).forEach((r, i) => {
+          const li = document.createElement('li');
+          if(r.me) li.classList.add('me');
+          li.innerHTML = `<span>#${i+1} ${r.name}</span><span>${r.points}</span>`;
+          lbEl.appendChild(li);
+        });
+      }else{
+        const li = document.createElement('li');
+        li.className = 'muted';
+        li.textContent = 'No entries yet — connect Strava to get started.';
+        lbEl.appendChild(li);
+      }
+
+      // Week number (if API provides)
+      if(lb?.week) weekNumEl.textContent = lb.week;
+    }
+
+    refreshBtn.addEventListener('click', loadState);
+
+    // Expand WebApp inside Telegram for nicer viewport
+    try{ tg && tg.expand(); }catch{}
+
+    // Initial load (if endpoints not ready, UI will gracefully show placeholders)
+    loadState();
+  </script>
+</body>
 </html>
 
 
