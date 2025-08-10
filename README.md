@@ -34,7 +34,7 @@ TELEGRAM_BOT_TOKEN=__set_in_env__
 TELEGRAM_WEBHOOK_SECRET=__random_string_for_route__
 PUBLIC_BOT_USERNAME=@the_bfit_bot
 APP_BASE_URL=https://bfitbot.netlify.app
-EDGE_BASE_URL=https://<project>.functions.supabase.co
+EDGE_BASE_URL=https://ibginimdnezoftxxygvt.functions.supabase.co
 SUPABASE_URL=...
 SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
@@ -72,12 +72,12 @@ supabase secrets set TELEGRAM_BOT_TOKEN=... TELEGRAM_WEBHOOK_SECRET=... \
   STRAVA_CLIENT_ID=... STRAVA_CLIENT_SECRET=... STRAVA_WEBHOOK_VERIFY_TOKEN=...
 
 # Set Telegram webhook
-curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook?url=https://<project>.functions.supabase.co/telegram/webhook/${TELEGRAM_WEBHOOK_SECRET}"
+curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook?url=https://ibginimdnezoftxxygvt.functions.supabase.co/telegram/webhook/${TELEGRAM_WEBHOOK_SECRET}"
 
 # Create Strava subscription (replace callback URL)
 curl -X POST https://www.strava.com/api/v3/push_subscriptions \
   -d client_id=$STRAVA_CLIENT_ID -d client_secret=$STRAVA_CLIENT_SECRET \
-  -d callback_url=https://<project>.functions.supabase.co/webhooks/strava \
+  -d callback_url=https://ibginimdnezoftxxygvt.functions.supabase.co/webhooks/strava \
   -d verify_token=$STRAVA_WEBHOOK_VERIFY_TOKEN
 ```
 
@@ -98,7 +98,7 @@ curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setMyCommands" \
 
 5) Trigger test activity insert (simulate):
 ```bash
-curl -X POST https://<project>.functions.supabase.co/webhooks/strava \
+curl -X POST https://ibginimdnezoftxxygvt.functions.supabase.co/webhooks/strava \
   -H 'content-type: application/json' \
   -d '{"object_type":"activity","aspect_type":"create","owner_id":"123","object_id":"456"}'
 ```

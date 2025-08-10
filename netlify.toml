@@ -3,7 +3,7 @@
 
 [[redirects]]
   from = "/oauth/strava/*"
-  to = "https://<project>.functions.supabase.co/:splat"
+  to = "https://ibginimdnezoftxxygvt.functions.supabase.co/:splat"
   status = 200
   force = true
 
