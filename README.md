@@ -35,9 +35,9 @@ TELEGRAM_WEBHOOK_SECRET=__random_string_for_route__
 PUBLIC_BOT_USERNAME=@the_bfit_bot
 APP_BASE_URL=https://bfitbot.netlify.app
 EDGE_BASE_URL=https://ibginimdnezoftxxygvt.functions.supabase.co
-SUPABASE_URL=...
-SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
+SUPABASE_URL=...        # set by platform; not accepted by `supabase secrets set`
+SUPABASE_ANON_KEY=...   # set by platform; not accepted by `supabase secrets set`
+SERVICE_ROLE_KEY=...    # use this name for the service role key in secrets
 STRAVA_CLIENT_ID=...
 STRAVA_CLIENT_SECRET=...
 STRAVA_WEBHOOK_VERIFY_TOKEN=__random__
@@ -68,7 +68,7 @@ supabase functions deploy telegram-webhook strava-webhook oauth-strava
 
 # Set secrets
 supabase secrets set TELEGRAM_BOT_TOKEN=... TELEGRAM_WEBHOOK_SECRET=... \
-  SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... APP_BASE_URL=... \
+  SERVICE_ROLE_KEY=... APP_BASE_URL=... EDGE_BASE_URL=... \
   STRAVA_CLIENT_ID=... STRAVA_CLIENT_SECRET=... STRAVA_WEBHOOK_VERIFY_TOKEN=...
 
 # Set Telegram webhook

@@ -3,9 +3,10 @@ import { calcPoints, getWeekStartDateISO, ActivityType } from "./points.ts";
 
 // Minimal server-side client using service role in Edge Function
 export function getServiceClient(): SupabaseClient {
+  // SUPABASE_URL is injected by the platform. Service role key should be provided via non-reserved env name.
   const url = Deno.env.get("SUPABASE_URL");
-  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!url || !key) throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+  const key = Deno.env.get("SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) throw new Error("Missing SUPABASE_URL or SERVICE_ROLE_KEY");
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
