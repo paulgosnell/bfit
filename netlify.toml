@@ -7,4 +7,10 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/webhooks/strava"
+  to = "/.netlify/functions/strava-proxy"
+  status = 200
+  force = true
+
 
