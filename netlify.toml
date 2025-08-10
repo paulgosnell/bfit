@@ -13,4 +13,10 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/telegram/webhook/*"
+  to = "/.netlify/functions/telegram-proxy/telegram/webhook/:splat"
+  status = 200
+  force = true
+
 
