@@ -157,6 +157,16 @@ export async function getUserByTelegramId(sb: SupabaseClient, telegram_id: numbe
   return data;
 }
 
+export async function getProviderForUser(sb: SupabaseClient, user_id: string, provider = "strava") {
+  const { data, error } = await sb
+    .from("providers")
+    .select("id, provider, provider_user_id, expires_at")
+    .match({ user_id, provider })
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function getLeaderboardForLeague(sb: SupabaseClient, league_id: string) {
   const week_start_date = getWeekStartDateISO(new Date());
   const { data, error } = await sb

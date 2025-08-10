@@ -1,12 +1,135 @@
 import { Hono } from "npm:hono@4";
 import { sendTelegramMessage, buildInlineKeyboard, commandFromText, answerCallbackQuery } from "../utils/telegram.ts";
-import { getServiceClient, upsertUserByTelegram, ensureDefaultPublicLeague, joinLeague, leaveLeague, getLeaderboardForLeague, getWeeklyTotals, processedUpdateMark, getUserByTelegramId, createLeague, promoteMember } from "../utils/db.ts";
+import { getServiceClient, upsertUserByTelegram, ensureDefaultPublicLeague, joinLeague, leaveLeague, getLeaderboardForLeague, getWeeklyTotals, processedUpdateMark, getUserByTelegramId, createLeague, promoteMember, getProviderForUser } from "../utils/db.ts";
 
 const app = new Hono();
 
 // Health endpoints (support with and without function slug prefix)
+
 app.get("/healthz", (c) => c.json({ ok: true }));
 app.get("/telegram-webhook/healthz", (c) => c.json({ ok: true }));
+
+// --- Read-only API for Mini-App (dashboard)
+app.get("/api/me", async (c) => {
+  try {
+    const uidRaw = c.req.query("uid") || "";
+    if (!uidRaw) return c.json({ connected: false, stats: {}, rival: null, username: null });
+    const sb = getServiceClient();
+
+    // Resolve user either by Telegram ID (number) or by internal UUID
+    let userRow: any = null;
+    const isNumeric = /^\d+$/.test(uidRaw);
+    if (isNumeric) {
+      userRow = await getUserByTelegramId(sb, Number(uidRaw));
+    } else {
+      const { data, error } = await sb.from("users").select("*").eq("id", uidRaw).maybeSingle();
+      if (error) console.warn("api/me users fetch", error);
+      userRow = data || null;
+    }
+    if (!userRow) return c.json({ connected: false, stats: {}, rival: null, username: null });
+
+    // Connection status (Strava)
+    const { data: prov, error: provErr } = await sb
+      .from("providers")
+      .select("provider, expires_at")
+      .eq("user_id", userRow.id)
+      .eq("provider", "strava")
+      .maybeSingle();
+    if (provErr) console.warn("api/me providers fetch", provErr);
+    const connected = !!prov;
+
+    // Weekly stats using existing util
+    const totals = await getWeeklyTotals(sb, userRow.id);
+    // Best-effort fields (fall back to 0/undefined if util doesn't provide)
+    const stats = {
+      points: Number(totals?.total ?? 0),
+      steps: Number(totals?.steps ?? 0),
+      distance: Number(totals?.distance_km ?? totals?.distance ?? 0) || 0,
+      streak: Number(totals?.streak ?? 0) || 0,
+    };
+
+    // Rival nudge: use default public league and compute diff to person above
+    const league = await ensureDefaultPublicLeague(sb);
+    const lb = await getLeaderboardForLeague(sb, league.id);
+    let rival: { name: string; diff: number } | null = null;
+    if (Array.isArray(lb?.rows)) {
+      const idx = lb.rows.findIndex((r: any) => r.user_id === userRow.id);
+      if (idx > 0) {
+        const me = lb.rows[idx];
+        const above = lb.rows[idx - 1];
+        const diff = Math.max(0, (above.points_total ?? 0) - (me.points_total ?? 0));
+        if (diff > 0) {
+          // Resolve display name
+          let name = String(above.user_id).slice(0, 6);
+          const { data: u2 } = await sb.from("users").select("username, first_name, last_name").eq("id", above.user_id).maybeSingle();
+          if (u2) name = u2.username || u2.first_name || name;
+          rival = { name, diff };
+        }
+      }
+    }
+
+    // Username for UI
+    const username = userRow.username || userRow.first_name || null;
+    c.header("Access-Control-Allow-Origin", "*");
+    return c.json({ connected, stats, rival, username });
+  } catch (e) {
+    console.error("api/me error", e);
+    c.header("Access-Control-Allow-Origin", "*");
+    return c.json({ connected: false, stats: {}, rival: null, username: null });
+  }
+});
+
+app.get("/api/leaderboard", async (c) => {
+  try {
+    const uidRaw = c.req.query("uid") || "";
+    const sb = getServiceClient();
+    const league = await ensureDefaultPublicLeague(sb);
+    const lb = await getLeaderboardForLeague(sb, league.id);
+
+    // Optional: mark "me" if uid provided
+    let meId: string | null = null;
+    if (/^\d+$/.test(uidRaw)) {
+      const me = await getUserByTelegramId(sb, Number(uidRaw));
+      meId = me?.id ?? null;
+    } else if (uidRaw && uidRaw.includes("-")) {
+      meId = uidRaw;
+    }
+
+    // Resolve names for top 10
+    const rowsRaw = (lb?.rows || []).slice(0, 10);
+    const ids = rowsRaw.map((r: any) => r.user_id);
+    const { data: usersMapData } = ids.length
+      ? await sb.from("users").select("id, username, first_name").in("id", ids)
+      : { data: [] as any[] };
+    const nameById = new Map<string, string>(
+      (usersMapData || []).map((u: any) => [u.id, u.username || u.first_name || String(u.id).slice(0, 6)])
+    );
+
+    const rows = rowsRaw.map((r: any) => ({
+      name: nameById.get(r.user_id) || String(r.user_id).slice(0, 6),
+      points: Number(r.points_total ?? 0),
+      me: meId ? r.user_id === meId : false,
+    }));
+
+    // ISO week number
+    const weekNum = (() => {
+      const d = new Date();
+      const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+      const dayNum = (date.getUTCDay() + 6) % 7;
+      date.setUTCDate(date.getUTCDate() - dayNum + 3);
+      const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+      const diff = (date.valueOf() - firstThursday.valueOf()) / 86400000;
+      return 1 + Math.floor(diff / 7);
+    })();
+
+    c.header("Access-Control-Allow-Origin", "*");
+    return c.json({ week: weekNum, rows });
+  } catch (e) {
+    console.error("api/leaderboard error", e);
+    c.header("Access-Control-Allow-Origin", "*");
+    return c.json({ week: null, rows: [] });
+  }
+});
 
 // Unified handler bound to multiple paths to cope with platform prefixing the function slug
 const handleTelegram = async (c: any) => {
@@ -95,8 +218,10 @@ const handleTelegram = async (c: any) => {
         const rowsWithNudge = rows + nudge;
         await sendTelegramMessage(token, { chat_id: chatId, text: rowsWithNudge });
       } else if (cmd === "/profile") {
-        const base = Deno.env.get("APP_BASE_URL") || "https://app.bfit.example"; // TODO
-        await sendTelegramMessage(token, { chat_id: chatId, text: `Profile: ${base}/profile?uid=${user_id}` });
+        const base = Deno.env.get("APP_BASE_URL") || "https://bfitbot.netlify.app";
+        const prov = await getProviderForUser(sb, user_id, "strava");
+        const linked = prov ? "✅ Strava linked" : "❌ Strava not linked";
+        await sendTelegramMessage(token, { chat_id: chatId, text: `${linked}. Profile: ${base}/profile?uid=${user_id}` });
       } else if (cmd === "/connect") {
         const appBase = Deno.env.get("APP_BASE_URL") || "https://bfitbot.netlify.app";
         const url = `${appBase}/oauth/strava/start?uid=${user_id}`;
