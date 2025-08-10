@@ -79,9 +79,8 @@ app.post("/telegram/webhook/:secret", async (c) => {
         const base = Deno.env.get("APP_BASE_URL") || "https://app.bfit.example"; // TODO
         await sendTelegramMessage(token, { chat_id: chatId, text: `Profile: ${base}/profile?uid=${user_id}` });
       } else if (cmd === "/connect") {
-        const base = Deno.env.get("APP_BASE_URL") || "https://app.bfit.example";
-        // TODO: include signed state
-        await sendTelegramMessage(token, { chat_id: chatId, text: `Connect Strava: ${base}/oauth/strava/start` });
+        const base = Deno.env.get("EDGE_BASE_URL") || Deno.env.get("APP_BASE_URL") || "https://app.bfit.example";
+        await sendTelegramMessage(token, { chat_id: chatId, text: `Connect Strava: ${base}/oauth/strava/start?uid=${user_id}` });
       } else if (cmd === "/addsteps") {
         const parts = args.split(/\s+/).filter(Boolean);
         let dateISO = new Date().toISOString().slice(0, 10);
