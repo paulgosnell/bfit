@@ -40,10 +40,14 @@ const handleTelegram = async (c: any) => {
 
       if (cmd === "/start") {
         const edgeBase = Deno.env.get("EDGE_BASE_URL");
+        const appBase = Deno.env.get("APP_BASE_URL") || "https://bfitbot.netlify.app";
+        const connectUrl = edgeBase
+          ? `${edgeBase}/oauth-strava/oauth/strava/start?uid=${user_id}`
+          : `${appBase}/oauth/strava/start?uid=${user_id}`;
         const kb = buildInlineKeyboard([
           [
             { text: "Join Public League", callback_data: "join_public" },
-            { text: "Connect Strava", url: `${edgeBase || (Deno.env.get("APP_BASE_URL") || "https://app.bfit.example")}/oauth/strava/start?uid=${user_id}` },
+            { text: "Connect Strava", url: connectUrl },
           ],
           [
             { text: "My Stats", callback_data: "stats" },
@@ -82,8 +86,12 @@ const handleTelegram = async (c: any) => {
         const base = Deno.env.get("APP_BASE_URL") || "https://app.bfit.example"; // TODO
         await sendTelegramMessage(token, { chat_id: chatId, text: `Profile: ${base}/profile?uid=${user_id}` });
       } else if (cmd === "/connect") {
-        const base = Deno.env.get("EDGE_BASE_URL") || Deno.env.get("APP_BASE_URL") || "https://app.bfit.example";
-        await sendTelegramMessage(token, { chat_id: chatId, text: `Connect Strava: ${base}/oauth/strava/start?uid=${user_id}` });
+        const edgeBase = Deno.env.get("EDGE_BASE_URL");
+        const appBase = Deno.env.get("APP_BASE_URL") || "https://bfitbot.netlify.app";
+        const url = edgeBase
+          ? `${edgeBase}/oauth-strava/oauth/strava/start?uid=${user_id}`
+          : `${appBase}/oauth/strava/start?uid=${user_id}`;
+        await sendTelegramMessage(token, { chat_id: chatId, text: `Connect Strava: ${url}` });
       } else if (cmd === "/addsteps") {
         const parts = args.split(/\s+/).filter(Boolean);
         let dateISO = new Date().toISOString().slice(0, 10);

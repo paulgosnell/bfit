@@ -1,4 +1,7 @@
 name = "oauth-strava"
 verify_jwt = false
 
+[routes]
+  include = ["/oauth/strava/*", "/oauth-strava/oauth/strava/*"]
+
 

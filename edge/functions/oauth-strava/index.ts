@@ -3,9 +3,21 @@ import { getServiceClient } from "../utils/db.ts";
 
 const app = new Hono();
 
+// Support both /oauth/strava/start and /oauth-strava/oauth/strava/start
 app.get("/oauth/strava/start", (c) => {
   const clientId = Deno.env.get("STRAVA_CLIENT_ID") || ""; // TODO
   const redirectUri = `${originFromRequest(c.req.raw)}/oauth/strava/callback`;
+  const uid = c.req.query("uid");
+  if (!uid) return c.text("Missing uid", 400);
+  const state = signState(uid);
+  const scope = "read,activity:read_all,profile:read_all";
+  const url = `https://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=auto&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
+  return c.redirect(url, 302);
+});
+
+app.get("/oauth-strava/oauth/strava/start", (c) => {
+  const clientId = Deno.env.get("STRAVA_CLIENT_ID") || "";
+  const redirectUri = `${originFromRequest(c.req.raw)}/oauth-strava/oauth/strava/callback`;
   const uid = c.req.query("uid");
   if (!uid) return c.text("Missing uid", 400);
   const state = signState(uid);
