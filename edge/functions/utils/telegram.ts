@@ -42,4 +42,18 @@ export function commandFromText(text?: string | null): { cmd: string; args: stri
   return { cmd, args };
 }
 
+export async function answerCallbackQuery(token: string, payload: {
+  callback_query_id: string;
+  text?: string;
+  show_alert?: boolean;
+  cache_time?: number;
+}): Promise<Response> {
+  const url = `https://api.telegram.org/bot${token}/answerCallbackQuery`;
+  return await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 

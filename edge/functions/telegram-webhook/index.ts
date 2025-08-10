@@ -1,5 +1,5 @@
 import { Hono } from "npm:hono@4";
-import { sendTelegramMessage, buildInlineKeyboard, commandFromText } from "../utils/telegram.ts";
+import { sendTelegramMessage, buildInlineKeyboard, commandFromText, answerCallbackQuery } from "../utils/telegram.ts";
 import { getServiceClient, upsertUserByTelegram, ensureDefaultPublicLeague, joinLeague, leaveLeague, getLeaderboardForLeague, getWeeklyTotals, processedUpdateMark, getUserByTelegramId, createLeague, promoteMember } from "../utils/db.ts";
 
 const app = new Hono();
@@ -132,21 +132,26 @@ const handleTelegram = async (c: any) => {
       const data = String(q.data || "");
       const chatId = q.message?.chat?.id as number;
       const fromId = q.from?.id as number;
+      const cbid = q.id as string;
       if (!chatId || !fromId) return c.json({ ok: true }, 200);
       const sbUser = await getUserByTelegramId(sb, fromId);
       if (!sbUser) return c.json({ ok: true }, 200);
       if (data === "join_public") {
+        // Instant feedback to user; process join in background
+        answerCallbackQuery(token, { callback_query_id: cbid, text: "Joining…", cache_time: 1 });
         const league = await ensureDefaultPublicLeague(sb);
         await joinLeague(sb, league.id, sbUser.id, "member");
-        await sendTelegramMessage(Deno.env.get("TELEGRAM_BOT_TOKEN")!, { chat_id: chatId, text: `Joined ${league.name}.` });
+        await sendTelegramMessage(token, { chat_id: chatId, text: `Joined ${league.name}.` });
       } else if (data === "stats") {
+        answerCallbackQuery(token, { callback_query_id: cbid, cache_time: 1 });
         const stats = await getWeeklyTotals(sb, sbUser.id);
-        await sendTelegramMessage(Deno.env.get("TELEGRAM_BOT_TOKEN")!, { chat_id: chatId, text: `Week: ${stats.total} pts` });
+        await sendTelegramMessage(token, { chat_id: chatId, text: `Week: ${stats.total} pts` });
       } else if (data === "leaderboard") {
+        answerCallbackQuery(token, { callback_query_id: cbid, cache_time: 1 });
         const league = await ensureDefaultPublicLeague(sb);
         const lb = await getLeaderboardForLeague(sb, league.id);
         const rows = lb.rows.map((r: any, i: number) => `${i + 1}. ${r.user_id === sbUser.id ? "(you)" : r.user_id.slice(0, 6)} – ${r.points_total}`).join("\n") || "No entries yet";
-        await sendTelegramMessage(Deno.env.get("TELEGRAM_BOT_TOKEN")!, { chat_id: chatId, text: rows });
+        await sendTelegramMessage(token, { chat_id: chatId, text: rows });
       }
     }
 
