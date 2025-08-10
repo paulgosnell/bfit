@@ -4,9 +4,12 @@ import { getServiceClient, upsertUserByTelegram, ensureDefaultPublicLeague, join
 
 const app = new Hono();
 
+// Health endpoints (support with and without function slug prefix)
 app.get("/healthz", (c) => c.json({ ok: true }));
+app.get("/telegram-webhook/healthz", (c) => c.json({ ok: true }));
 
-app.post("/telegram/webhook/:secret", async (c) => {
+// Unified handler bound to multiple paths to cope with platform prefixing the function slug
+const handleTelegram = async (c: any) => {
   const secret = c.req.param("secret");
   const expected = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
   if (!expected || secret !== expected) return c.json({ ok: true }, 200);
@@ -152,7 +155,11 @@ app.post("/telegram/webhook/:secret", async (c) => {
     console.error(JSON.stringify({ scope: "telegram", ok: false, error: String(e?.message || e) }));
     return c.json({ ok: true }); // Telegram should not retry storm
   }
-});
+  return c.json({ ok: true });
+};
+
+app.post("/telegram/webhook/:secret", handleTelegram);
+app.post("/telegram-webhook/telegram/webhook/:secret", handleTelegram);
 
 export default {
   fetch: (req: Request) => app.fetch(req),
