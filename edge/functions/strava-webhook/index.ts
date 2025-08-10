@@ -3,7 +3,18 @@ import { getServiceClient, insertPointsForActivity, flagOverlappingLongActivitie
 
 const app = new Hono();
 
+// Support both root and explicit path for Strava subscription verify
 app.get("/webhooks/strava", (c) => {
+  const verifyToken = c.req.query("hub.verify_token");
+  const challenge = c.req.query("hub.challenge");
+  const expected = Deno.env.get("STRAVA_WEBHOOK_VERIFY_TOKEN");
+  if (verifyToken && challenge && expected && verifyToken === expected) {
+    return c.json({ "hub.challenge": challenge });
+  }
+  return c.json({ ok: true }, 200);
+});
+
+app.get("/", (c) => {
   const verifyToken = c.req.query("hub.verify_token");
   const challenge = c.req.query("hub.challenge");
   const expected = Deno.env.get("STRAVA_WEBHOOK_VERIFY_TOKEN");
@@ -43,6 +54,43 @@ app.post("/webhooks/strava", async (c) => {
         }
       }
 
+      const act = await fetchStravaActivity(accessToken, objectId);
+      if (act) {
+        const activityRow = await upsertActivityFromStrava(sb, prov.user_id as string, act);
+        await insertPointsForActivity(sb, activityRow.id, prov.user_id as string, (activityRow.type as any), activityRow);
+        await flagOverlappingLongActivities(sb, prov.user_id as string, activityRow.start_time, activityRow.duration_seconds);
+      }
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ scope: "strava-webhook", ok: false, error: String(e?.message || e) }));
+  }
+  return c.json({ ok: true });
+});
+
+app.post("/", async (c) => {
+  const sb = getServiceClient();
+  const payload = await c.req.json();
+  await sb.from("webhook_logs").insert({ source: "strava", payload });
+  try {
+    if (payload.object_type === "activity" && (payload.aspect_type === "create" || payload.aspect_type === "update")) {
+      const ownerId = String(payload.owner_id);
+      const objectId = String(payload.object_id);
+      const { data: prov, error: e1 } = await sb
+        .from("providers")
+        .select("id, user_id, access_token, refresh_token, expires_at, provider_user_id")
+        .eq("provider", "strava")
+        .eq("provider_user_id", ownerId)
+        .maybeSingle();
+      if (e1) throw e1;
+      if (!prov) return c.json({ ok: true });
+      let accessToken = prov.access_token as string;
+      if (prov.expires_at && new Date(prov.expires_at) < new Date()) {
+        const refreshed = await refreshStravaToken(prov.refresh_token as string);
+        if (refreshed) {
+          accessToken = refreshed.access_token;
+          await sb.from("providers").update({ access_token: refreshed.access_token, refresh_token: refreshed.refresh_token, expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString() }).eq("id", prov.id);
+        }
+      }
       const act = await fetchStravaActivity(accessToken, objectId);
       if (act) {
         const activityRow = await upsertActivityFromStrava(sb, prov.user_id as string, act);
