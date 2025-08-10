@@ -82,6 +82,47 @@ app.get("/oauth/strava/callback", async (c) => {
   return c.html(html);
 });
 
+// Also handle slug-prefixed callback when routed via proxy
+app.get("/oauth-strava/oauth/strava/callback", async (c) => {
+  const code = c.req.query("code");
+  const state = c.req.query("state");
+  if (!code) return c.text("Missing code", 400);
+  const uid = verifyState(state || "");
+  if (!uid) return c.text("Invalid state", 400);
+  const clientId = Deno.env.get("STRAVA_CLIENT_ID")!;
+  const clientSecret = Deno.env.get("STRAVA_CLIENT_SECRET")!;
+  const tokenResp = await fetch("https://www.strava.com/oauth/token", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code, grant_type: "authorization_code" }),
+  });
+  if (!tokenResp.ok) return c.text("OAuth failed", 400);
+  const tokenJson = await tokenResp.json();
+  const access_token = tokenJson.access_token as string;
+  const refresh_token = tokenJson.refresh_token as string;
+  const expires_in = Number(tokenJson.expires_in || 0);
+  const athlete = tokenJson.athlete || {};
+  const provider_user_id = String(athlete.id || "");
+
+  const sb = getServiceClient();
+  const user_id = uid;
+
+  await sb.from("providers").upsert({
+    user_id,
+    provider: "strava",
+    access_token,
+    refresh_token,
+    expires_at: new Date(Date.now() + expires_in * 1000).toISOString(),
+    provider_user_id,
+  });
+
+  await sb.from("webhook_logs").insert({ source: "strava", payload: { note: "oauth_completed", provider_user_id } });
+
+  const bot = (Deno.env.get("PUBLIC_BOT_USERNAME") || "@the_bfit_bot").replace(/^@/, "");
+  const html = `<!doctype html><html><head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/><title>BFIT – Connected</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;text-align:center}a.button{display:inline-block;margin-top:1rem;padding:.75rem 1rem;background:#111827;color:#fff;border-radius:10px;text-decoration:none}</style></head><body><h2>Strava connected ✅</h2><p>You can return to Telegram.</p><a class=\"button\" href=\"tg://resolve?domain=${bot}&start=connected\">Open Telegram</a><p><a href=\"https://t.me/${bot}?start=connected\">Open in Telegram (web link)</a></p><script>setTimeout(function(){location.href='tg://resolve?domain=${bot}&start=connected'},800);</script></body></html>`;
+  return c.html(html);
+});
+
 function originFromRequest(req: Request): string {
   try {
     const url = new URL(req.url);
