@@ -36,10 +36,11 @@ app.post("/telegram/webhook/:secret", async (c) => {
       const { id: user_id } = user;
 
       if (cmd === "/start") {
+        const edgeBase = Deno.env.get("EDGE_BASE_URL");
         const kb = buildInlineKeyboard([
           [
             { text: "Join Public League", callback_data: "join_public" },
-            { text: "Connect Strava", url: `${Deno.env.get("APP_BASE_URL") || "https://app.bfit.example"}/oauth/strava/start?uid=${user_id}` },
+            { text: "Connect Strava", url: `${edgeBase || (Deno.env.get("APP_BASE_URL") || "https://app.bfit.example")}/oauth/strava/start?uid=${user_id}` },
           ],
           [
             { text: "My Stats", callback_data: "stats" },

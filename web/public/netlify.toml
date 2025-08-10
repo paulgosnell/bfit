@@ -1,0 +1,10 @@
+[build]
+  publish = "web/public"
+
+[[redirects]]
+  from = "/oauth/strava/*"
+  to = "https://<project>.functions.supabase.co/:splat"
+  status = 200
+  force = true
+
+

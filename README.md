@@ -33,7 +33,8 @@ Set via Supabase secrets (placeholders as TODOs):
 TELEGRAM_BOT_TOKEN=__set_in_env__
 TELEGRAM_WEBHOOK_SECRET=__random_string_for_route__
 PUBLIC_BOT_USERNAME=@the_bfit_bot
-APP_BASE_URL=https://app.bfit.example
+APP_BASE_URL=https://bfitbot.netlify.app
+EDGE_BASE_URL=https://<project>.functions.supabase.co
 SUPABASE_URL=...
 SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
@@ -93,7 +94,7 @@ curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setMyCommands" \
 
 3) Tap Join Public League or send /join
 
-4) Connect Strava at `APP_BASE_URL` → redirects to `/oauth/strava/start`
+4) Connect Strava at `APP_BASE_URL` → redirects to `/oauth/strava/start` (Netlify proxies to Supabase)
 
 5) Trigger test activity insert (simulate):
 ```bash
