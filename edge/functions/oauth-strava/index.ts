@@ -12,7 +12,7 @@ app.get("/oauth/strava/start", (c) => {
   if (!uid) return c.text("Missing uid", 400);
   const state = signState(uid);
   const scope = "read,activity:read_all,profile:read_all";
-  const url = `https://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=auto&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
+  const url = `https://m.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=auto&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
   return c.redirect(url, 302);
 });
 
@@ -24,7 +24,7 @@ app.get("/oauth-strava/oauth/strava/start", (c) => {
   if (!uid) return c.text("Missing uid", 400);
   const state = signState(uid);
   const scope = "read,activity:read_all,profile:read_all";
-  const url = `https://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=auto&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
+  const url = `https://m.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&approval_prompt=auto&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
   return c.redirect(url, 302);
 });
 
