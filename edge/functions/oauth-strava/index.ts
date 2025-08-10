@@ -6,7 +6,8 @@ const app = new Hono();
 // Support both /oauth/strava/start and /oauth-strava/oauth/strava/start
 app.get("/oauth/strava/start", (c) => {
   const clientId = Deno.env.get("STRAVA_CLIENT_ID") || ""; // TODO
-  const redirectUri = `${originFromRequest(c.req.raw)}/oauth/strava/callback`;
+  const appBase = Deno.env.get("APP_BASE_URL") || originFromRequest(c.req.raw);
+  const redirectUri = `${appBase}/oauth/strava/callback`;
   const uid = c.req.query("uid");
   if (!uid) return c.text("Missing uid", 400);
   const state = signState(uid);
@@ -17,7 +18,8 @@ app.get("/oauth/strava/start", (c) => {
 
 app.get("/oauth-strava/oauth/strava/start", (c) => {
   const clientId = Deno.env.get("STRAVA_CLIENT_ID") || "";
-  const redirectUri = `${originFromRequest(c.req.raw)}/oauth-strava/oauth/strava/callback`;
+  const appBase = Deno.env.get("APP_BASE_URL") || originFromRequest(c.req.raw);
+  const redirectUri = `${appBase}/oauth/strava/callback`;
   const uid = c.req.query("uid");
   if (!uid) return c.text("Missing uid", 400);
   const state = signState(uid);
