@@ -1,0 +1,4 @@
+name = "strava-webhook"
+verify_jwt = false
+
+
