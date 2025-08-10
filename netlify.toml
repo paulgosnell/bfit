@@ -3,7 +3,7 @@
 
 [[redirects]]
   from = "/oauth/strava/*"
-  to = "https://ibginimdnezoftxxygvt.functions.supabase.co/oauth-strava/:splat"
+  to = "/.netlify/functions/oauth-proxy/oauth/strava/:splat"
   status = 200
   force = true
 
