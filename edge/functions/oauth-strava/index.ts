@@ -1,5 +1,6 @@
 import { Hono } from "npm:hono@4";
 import { getServiceClient } from "../utils/db.ts";
+import { sendTelegramMessage } from "../utils/telegram.ts";
 
 const app = new Hono();
 
@@ -63,6 +64,18 @@ app.get("/oauth/strava/callback", async (c) => {
 
   // Trigger initial backfill
   await sb.from("webhook_logs").insert({ source: "strava", payload: { note: "oauth_completed", provider_user_id } });
+
+  // Nudge user back in Telegram chat
+  try {
+    const { data: userRow } = await sb.from("users").select("telegram_id").eq("id", user_id).single();
+    const tgId = userRow?.telegram_id as number | undefined;
+    const tgToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    if (tgId && tgToken) {
+      await sendTelegramMessage(tgToken, { chat_id: tgId, text: "Strava connected ✅. You’re all set. Try /stats or /leaderboard." });
+    }
+  } catch (_) {
+    // ignore
+  }
 
   const bot = (Deno.env.get("PUBLIC_BOT_USERNAME") || "@the_bfit_bot").replace(/^@/, "");
   const html = `<!doctype html><html><head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/><title>BFIT – Connected</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;text-align:center}a.button{display:inline-block;margin-top:1rem;padding:.75rem 1rem;background:#111827;color:#fff;border-radius:10px;text-decoration:none}</style></head><body><h2>Strava connected ✅</h2><p>You can return to Telegram.</p><a class=\"button\" href=\"tg://resolve?domain=${bot}&start=connected\">Open Telegram</a><p><a href=\"https://t.me/${bot}?start=connected\">Open in Telegram (web link)</a></p><script>setTimeout(function(){location.href='tg://resolve?domain=${bot}&start=connected'},800);</script></body></html>`;
