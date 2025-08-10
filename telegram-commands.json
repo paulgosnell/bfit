@@ -1,0 +1,13 @@
+[
+  { "command": "start", "description": "Create account and show actions" },
+  { "command": "help", "description": "List commands" },
+  { "command": "join", "description": "Join the public league" },
+  { "command": "leave", "description": "Leave current league" },
+  { "command": "stats", "description": "Your weekly points and recent" },
+  { "command": "leaderboard", "description": "Top 10 this week" },
+  { "command": "profile", "description": "View your profile" },
+  { "command": "connect", "description": "Connect Strava" },
+  { "command": "addsteps", "description": "Add steps (e.g. /addsteps 12000)" }
+]
+
+
