@@ -24,6 +24,17 @@ app.get("/", (c) => {
   return c.json({ ok: true }, 200);
 });
 
+// Fallback for GET verification on any path
+app.get("*", (c) => {
+  const verifyToken = c.req.query("hub.verify_token");
+  const challenge = c.req.query("hub.challenge");
+  const expected = Deno.env.get("STRAVA_WEBHOOK_VERIFY_TOKEN");
+  if (verifyToken && challenge && expected && verifyToken === expected) {
+    return c.json({ "hub.challenge": challenge });
+  }
+  return c.json({ ok: true }, 200);
+});
+
 app.post("/webhooks/strava", async (c) => {
   const sb = getServiceClient();
   const payload = await c.req.json();
@@ -101,6 +112,14 @@ app.post("/", async (c) => {
   } catch (e) {
     console.error(JSON.stringify({ scope: "strava-webhook", ok: false, error: String(e?.message || e) }));
   }
+  return c.json({ ok: true });
+});
+
+// Fallback POST handler
+app.post("*", async (c) => {
+  const sb = getServiceClient();
+  const payload = await c.req.json();
+  await sb.from("webhook_logs").insert({ source: "strava", payload });
   return c.json({ ok: true });
 });
 
