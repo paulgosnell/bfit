@@ -39,11 +39,8 @@ const handleTelegram = async (c: any) => {
       const { id: user_id } = user;
 
       if (cmd === "/start") {
-        const edgeBase = Deno.env.get("EDGE_BASE_URL");
         const appBase = Deno.env.get("APP_BASE_URL") || "https://bfitbot.netlify.app";
-        const connectUrl = edgeBase
-          ? `${edgeBase}/oauth-strava/oauth/strava/start?uid=${user_id}`
-          : `${appBase}/oauth/strava/start?uid=${user_id}`;
+        const connectUrl = `${appBase}/oauth/strava/start?uid=${user_id}`;
         const kb = buildInlineKeyboard([
           [
             { text: "Join Public League", callback_data: "join_public" },
@@ -52,6 +49,9 @@ const handleTelegram = async (c: any) => {
           [
             { text: "My Stats", callback_data: "stats" },
             { text: "Leaderboard", callback_data: "leaderboard" },
+          ],
+          [
+            { text: "Open BFIT", web_app: { url: `${appBase}/` } },
           ],
         ]);
         await sendTelegramMessage(token, {
@@ -63,7 +63,7 @@ const handleTelegram = async (c: any) => {
       } else if (cmd === "/help") {
         await sendTelegramMessage(token, {
           chat_id: chatId,
-          text: "/start, /join, /leave, /stats, /leaderboard, /profile, /connect, /addsteps",
+          text: "/start, /join, /leave, /stats, /leaderboard, /profile, /connect",
         });
       } else if (cmd === "/join") {
         const league = await ensureDefaultPublicLeague(sb);
@@ -81,39 +81,26 @@ const handleTelegram = async (c: any) => {
         const league = await ensureDefaultPublicLeague(sb);
         const lb = await getLeaderboardForLeague(sb, league.id);
         const rows = lb.rows.map((r: any, i: number) => `${i + 1}. ${r.user_id === user_id ? "(you)" : r.user_id.slice(0, 6)} – ${r.points_total}`).join("\n") || "No entries yet";
-        await sendTelegramMessage(token, { chat_id: chatId, text: rows });
+        const myIdx = lb.rows.findIndex((r: any) => r.user_id === user_id);
+        let nudge = "";
+        if (myIdx > 0) {
+          const me = lb.rows[myIdx];
+          const rival = lb.rows[myIdx - 1];
+          const diff = Math.max(0, (rival.points_total ?? 0) - (me.points_total ?? 0));
+          if (diff > 0) {
+            const rivalName = rival.user_id === user_id ? "(you)" : String(rival.user_id).slice(0, 6);
+            nudge = `\n\nOnly ${diff} pts to pass ${rivalName} — one good session will do it.`;
+          }
+        }
+        const rowsWithNudge = rows + nudge;
+        await sendTelegramMessage(token, { chat_id: chatId, text: rowsWithNudge });
       } else if (cmd === "/profile") {
         const base = Deno.env.get("APP_BASE_URL") || "https://app.bfit.example"; // TODO
         await sendTelegramMessage(token, { chat_id: chatId, text: `Profile: ${base}/profile?uid=${user_id}` });
       } else if (cmd === "/connect") {
-        const edgeBase = Deno.env.get("EDGE_BASE_URL");
         const appBase = Deno.env.get("APP_BASE_URL") || "https://bfitbot.netlify.app";
-        const url = edgeBase
-          ? `${edgeBase}/oauth-strava/oauth/strava/start?uid=${user_id}`
-          : `${appBase}/oauth/strava/start?uid=${user_id}`;
+        const url = `${appBase}/oauth/strava/start?uid=${user_id}`;
         await sendTelegramMessage(token, { chat_id: chatId, text: `Connect Strava: ${url}` });
-      } else if (cmd === "/addsteps") {
-        const parts = args.split(/\s+/).filter(Boolean);
-        let dateISO = new Date().toISOString().slice(0, 10);
-        let steps = 0;
-        if (parts.length === 1) {
-          steps = Number(parts[0]);
-        } else if (parts.length >= 2) {
-          dateISO = parts[0];
-          steps = Number(parts[1]);
-        }
-        if (!Number.isFinite(steps) || steps <= 0) {
-          await sendTelegramMessage(token, { chat_id: chatId, text: "Usage: /addsteps 12000 or /addsteps 2025-01-01 12000" });
-        } else if (steps > 50_000) {
-          await sendTelegramMessage(token, { chat_id: chatId, text: "Too many steps for a day." });
-        } else {
-          try {
-            await (await import("../utils/db.ts")).addManualSteps(sb, user_id, dateISO, steps);
-            await sendTelegramMessage(token, { chat_id: chatId, text: `Added ${steps} steps for ${dateISO}.` });
-          } catch (e) {
-            await sendTelegramMessage(token, { chat_id: chatId, text: `Could not add steps (${e.message}).` });
-          }
-        }
       } else if (cmd === "/newleague") {
         const name = args || "New League";
         const league = await createLeague(sb, user_id, name);
@@ -128,7 +115,11 @@ const handleTelegram = async (c: any) => {
             await promoteMember(sb, league.id, user_id, target);
             await sendTelegramMessage(token, { chat_id: chatId, text: "Member promoted." });
           } catch (e) {
-            await sendTelegramMessage(token, { chat_id: chatId, text: `Cannot promote (${e.message}).` });
+            const msg = String(e?.message || e);
+            const hint = msg.toLowerCase().includes("forbidden") || msg.toLowerCase().includes("not admin")
+              ? "Only league admins can use /promote."
+              : "Unable to promote. Check the user ID and your permissions.";
+            await sendTelegramMessage(token, { chat_id: chatId, text: hint });
           }
         }
       } else {
@@ -159,7 +150,19 @@ const handleTelegram = async (c: any) => {
         const league = await ensureDefaultPublicLeague(sb);
         const lb = await getLeaderboardForLeague(sb, league.id);
         const rows = lb.rows.map((r: any, i: number) => `${i + 1}. ${r.user_id === sbUser.id ? "(you)" : r.user_id.slice(0, 6)} – ${r.points_total}`).join("\n") || "No entries yet";
-        await sendTelegramMessage(token, { chat_id: chatId, text: rows });
+        const myIdx = lb.rows.findIndex((r: any) => r.user_id === sbUser.id);
+        let nudge = "";
+        if (myIdx > 0) {
+          const me = lb.rows[myIdx];
+          const rival = lb.rows[myIdx - 1];
+          const diff = Math.max(0, (rival.points_total ?? 0) - (me.points_total ?? 0));
+          if (diff > 0) {
+            const rivalName = rival.user_id === sbUser.id ? "(you)" : String(rival.user_id).slice(0, 6);
+            nudge = `\n\nOnly ${diff} pts to pass ${rivalName} — one good session will do it.`;
+          }
+        }
+        const rowsWithNudge = rows + nudge;
+        await sendTelegramMessage(token, { chat_id: chatId, text: rowsWithNudge });
       }
     }
 
@@ -177,5 +180,3 @@ app.post("/telegram-webhook/telegram/webhook/:secret", handleTelegram);
 export default {
   fetch: (req: Request) => app.fetch(req),
 };
-
-
